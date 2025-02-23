@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { ScaleLoader } from 'react-spinners'; // Import the spinner
-import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
+import { ScaleLoader } from 'react-spinners';
+import { BrowserRouter as Router, Route, Routes, Link, Navigate } from 'react-router-dom';
+import Login from './components/Login';
+import Register from './components/Register';
 
 function App() {
   const [artworks, setArtworks] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null); // Track logged-in user
 
   // Fetch artworks from the backend using environment variable or fallback to localhost
   useEffect(() => {
@@ -25,6 +28,27 @@ function App() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  // Handle login
+  const handleLogin = (userData) => {
+    setUser(userData);
+  };
+
+  // Handle register
+  const handleRegister = (userData) => {
+    setUser(userData);
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/logout`, {
+      method: 'GET',
+      credentials: 'include', // Include cookies for session
+    })
+      .then((response) => response.json())
+      .then(() => setUser(null))
+      .catch((error) => console.error('Error logging out:', error));
+  };
 
   return (
     <Router>
@@ -52,6 +76,29 @@ function App() {
                 Membership
               </Link>
             </li>
+            {user ? (
+              <li>
+                <button
+                  onClick={handleLogout}
+                  className="text-gray-800 hover:text-red-600 font-medium"
+                >
+                  Logout
+                </button>
+              </li>
+            ) : (
+              <>
+                <li>
+                  <Link to="/login" className="text-gray-800 hover:text-blue-600 font-medium">
+                    Login
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/register" className="text-gray-800 hover:text-blue-600 font-medium">
+                    Register
+                  </Link>
+                </li>
+              </>
+            )}
           </ul>
         </nav>
 
@@ -109,10 +156,11 @@ function App() {
               </div>
             }
           />
-          {/* Placeholder routes (to be implemented later) */}
+          <Route path="/login" element={<Login onLogin={handleLogin} />} />
+          <Route path="/register" element={<Register onRegister={handleRegister} />} />
           <Route path="/artworks" element={<div>Artworks Page (Coming Soon)</div>} />
           <Route path="/artists" element={<div>Artists Page (Coming Soon)</div>} />
-          <Route path="/membership" element={<div>Membership Page (Coming Soon)</div>} />
+          <Route path="/membership" element={user ? <div>Membership Page (Coming Soon)</div> : <Navigate to="/login" />} />
         </Routes>
       </div>
     </Router>
