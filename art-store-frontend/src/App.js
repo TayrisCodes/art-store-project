@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { RotatingLines } from 'react-loader-spinner';
+import { ScaleLoader } from 'react-spinners'; // Import the spinner
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
 
 function App() {
@@ -7,10 +7,11 @@ function App() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch artworks from the backend
+  // Fetch artworks from the backend using environment variable or fallback to localhost
   useEffect(() => {
     setLoading(true);
-    fetch('http://localhost:5000/api/artworks')
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    fetch(`${apiUrl}/api/artworks`)
       .then((response) => {
         if (!response.ok) {
           throw new Error('Failed to fetch artworks');
@@ -77,12 +78,12 @@ function App() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
                     {loading ? (
                       <div className="col-span-full flex justify-center items-center">
-                        <RotatingLines
-                          strokeColor="grey"
-                          strokeWidth="5"
-                          animationDuration="0.75"
-                          width="96"
-                          visible={true}
+                        <ScaleLoader
+                          color="gray"
+                          height={48}
+                          width={4}
+                          radius={2}
+                          margin={2}
                         />
                       </div>
                     ) : error ? (
@@ -97,9 +98,7 @@ function App() {
                           />
                           <h3 className="mt-4 text-lg font-medium text-gray-900">{artwork.title}</h3>
                           <p className="mt-2 text-gray-600">${artwork.price}</p>
-                          <p className="mt-1 text-sm text-gray-500">
-                            {artwork.artist} - {artwork.medium || 'Unknown Medium'}
-                          </p>
+                          <p className="mt-1 text-sm text-gray-500">{artwork.artist} - {artwork.medium || 'Unknown Medium'}</p>
                         </div>
                       ))
                     ) : (
@@ -110,7 +109,7 @@ function App() {
               </div>
             }
           />
-          {/* Placeholder routes */}
+          {/* Placeholder routes (to be implemented later) */}
           <Route path="/artworks" element={<div>Artworks Page (Coming Soon)</div>} />
           <Route path="/artists" element={<div>Artists Page (Coming Soon)</div>} />
           <Route path="/membership" element={<div>Membership Page (Coming Soon)</div>} />
