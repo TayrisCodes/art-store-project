@@ -11,7 +11,10 @@ const port = 5000;
 
 // Middleware
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+    origin: '*', // Match your frontend URL
+    credentials: true,
+  }));
 app.use(passport.initialize());
 
 // MongoDB connection string from .env
