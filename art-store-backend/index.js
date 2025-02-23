@@ -161,6 +161,50 @@ app.get('/api/cart', isAuthenticated, async (req, res) => {
   }
 });
 
+// New Search API
+app.get('/api/artworks/search', async (req, res) => {
+    try {
+      const { q, category, priceMin, priceMax, artist, style } = req.query;
+      let query = {};
+  
+      // Search by keyword (title or artist)
+      if (q) {
+        query.$or = [
+          { title: { $regex: q, $options: 'i' } }, // Case-insensitive search in title
+          { artist: { $regex: q, $options: 'i' } }, // Case-insensitive search in artist
+        ];
+      }
+  
+      // Filter by category
+      if (category) {
+        query.medium = category;
+      }
+  
+      // Filter by price range
+      if (priceMin || priceMax) {
+        query.price = {};
+        if (priceMin) query.price.$gte = parseFloat(priceMin);
+        if (priceMax) query.price.$lte = parseFloat(priceMax);
+      }
+
+      // Filter by artist
+      if (artist) {
+        query.artist = { $regex: artist, $options: 'i' };
+      }
+  
+      // Filter by style (if you add a style field to artworks in MongoDB)
+      if (style) {
+        query.style = style; // Assuming artworks have a 'style' field (e.g., Abstract, Realism)
+      }
+  
+      const artworks = await artworksCollection.find(query).toArray();
+      res.json(artworks);
+    } catch (error) {
+    console.error('Error searching artworks:', error);
+    res.status(500).send('Something went wrong');
+    }
+});
+
 // Payment with Stripe (test mode)
 app.post('/api/checkout', isAuthenticated, async (req, res) => {
   try {
