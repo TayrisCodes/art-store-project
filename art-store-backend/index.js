@@ -77,9 +77,54 @@ const isAuthenticated = (req, res, next) => {
   res.status(401).json({ message: 'Unauthorized' });
 };
 
+// Middleware to check membership level
+const requireMembership = (tier) => {
+  return (req, res, next) => {
+    if (req.isAuthenticated() && req.user.membershipTier === tier) {
+      return next();
+    }
+    res.status(403).json({ message: 'Forbidden: Membership required' });
+  };
+};
+
 // Root route
 app.get('/', (req, res) => {
   res.send('Hello from the Art Store backend!');
+});
+
+// New Membership APIs
+app.get('/api/membership/status', isAuthenticated, async (req, res) => {
+  try {
+    const user = await usersCollection.findOne({ _id: new ObjectId(req.user._id) });
+    res.json({ membershipTier: user.membershipTier, message: 'Membership status retrieved' });
+  } catch (error) {
+    console.error('Error fetching membership status:', error);
+    res.status(500).send('Something went wrong');
+  }
+});
+
+app.post('/api/membership/upgrade', isAuthenticated, async (req, res) => {
+  try {
+    const { tier } = req.body; // e.g., "Basic" or "Premium"
+    if (!['Basic', 'Premium'].includes(tier)) return res.status(400).json({ message: 'Invalid membership tier' });
+
+    await usersCollection.updateOne(
+      { _id: new ObjectId(req.user._id) },
+      { $set: { membershipTier: tier } }
+    );
+    res.json({ message: `Upgraded to ${tier} membership` });
+  } catch (error) {
+    console.error('Error upgrading membership:', error);
+    res.status(500).send('Something went wrong');
+  }
+});
+
+// Example of protected content for Premium members
+app.get('/api/exclusive-content', requireMembership('Premium'), (req, res) => {
+  res.json({
+    message: 'Exclusive content for Premium members',
+    content: 'Early access to new artworks and special discounts!'
+  });
 });
 
 // API endpoint to fetch artworks from MongoDB
@@ -101,7 +146,7 @@ app.post('/api/register', async (req, res) => {
     if (existingUser) return res.status(400).json({ message: 'Username already exists' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = { username, password: hashedPassword };
+    const newUser = { username, password: hashedPassword, membershipTier: 'Basic' }; // Set default membership tier
     await usersCollection.insertOne(newUser);
 
     res.status(201).json({ message: 'User registered successfully' });
