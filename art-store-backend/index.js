@@ -1,11 +1,11 @@
+require('dotenv').config(); // Load environment variables
 const express = require('express');
 const { MongoClient, ObjectId } = require('mongodb');
 const cors = require('cors');
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const bcrypt = require('bcrypt');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Add to .env
-require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Initialize Stripe
 
 const app = express();
 const port = 5000;
@@ -13,7 +13,7 @@ const port = 5000;
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: 'https://art-store-frontend.onrender.com', // Match your frontend URL
+  origin: '*',
   credentials: true,
 }));
 app.use(passport.initialize());
@@ -40,7 +40,7 @@ const usersCollection = db.collection('users');
 const cartsCollection = db.collection('carts');
 const wishlistsCollection = db.collection('wishlists');
 
-// Passport configuration (unchanged from previous step)
+// Passport configuration
 passport.use(
   new LocalStrategy(async (username, password, done) => {
     try {
@@ -92,7 +92,7 @@ app.get('/api/artworks', async (req, res) => {
   }
 });
 
-// Register, Login, Logout (unchanged from previous step)
+// Register user
 app.post('/api/register', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -110,20 +110,17 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
+// User login
 app.post('/api/login', passport.authenticate('local'), (req, res) => {
   res.json({ message: 'Logged in successfully', user: req.user });
 });
 
+// User logout
 app.get('/api/logout', (req, res) => {
   req.logout((err) => {
     if (err) return res.status(500).send('Error logging out');
     res.json({ message: 'Logged out successfully' });
   });
-});
-
-// Protected route example
-app.get('/api/protected', isAuthenticated, (req, res) => {
-  res.json({ message: 'This is a protected route', user: req.user });
 });
 
 // Cart APIs
@@ -160,44 +157,6 @@ app.get('/api/cart', isAuthenticated, async (req, res) => {
     res.json(cartItems);
   } catch (error) {
     console.error('Error fetching cart:', error);
-    res.status(500).send('Something went wrong');
-  }
-});
-
-// Wishlist APIs
-app.post('/api/wishlist/add', isAuthenticated, async (req, res) => {
-  try {
-    const { artworkId } = req.body;
-    const userId = req.user._id;
-    const wishlistItem = await wishlistsCollection.findOne({ userId, artworkId });
-    if (wishlistItem) return res.status(400).json({ message: 'Artwork already in wishlist' });
-
-    await wishlistsCollection.insertOne({ userId, artworkId });
-    res.json({ message: 'Artwork added to wishlist' });
-  } catch (error) {
-    console.error('Error adding to wishlist:', error);
-    res.status(500).send('Something went wrong');
-  }
-});
-
-app.get('/api/wishlist', isAuthenticated, async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const wishlistItems = await wishlistsCollection.aggregate([
-      { $match: { userId: new ObjectId(userId) } },
-      {
-        $lookup: {
-          from: 'artworks',
-          localField: 'artworkId',
-          foreignField: 'id',
-          as: 'artwork'
-        }
-      },
-      { $unwind: '$artwork' }
-    ]).toArray();
-    res.json(wishlistItems);
-  } catch (error) {
-    console.error('Error fetching wishlist:', error);
     res.status(500).send('Something went wrong');
   }
 });
