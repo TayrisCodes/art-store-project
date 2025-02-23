@@ -6,67 +6,66 @@ import Register from './components/Register';
 import Cart from './components/Cart';
 import Wishlist from './components/Wishlist';
 import SearchFilter from './components/SearchFilter';
+import ArtistList from './components/ArtistList';
+import ArtistProfile from './components/ArtistProfile';
 
 function App() {
   const [artworks, setArtworks] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null); // Track logged-in user
+  const [user, setUser] = useState(null);
   const [filters, setFilters] = useState({});
 
   // Fetch artworks from the backend
   useEffect(() => {
-    const fetchArtworks = async () => {
-      setLoading(true);
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      const url = filters.q || filters.category || filters.priceMin || filters.priceMax || filters.artist || filters.style
-        ? `${apiUrl}/api/artworks/search?${new URLSearchParams(filters).toString()}`
-        : `${apiUrl}/api/artworks`;
+    setLoading(true);
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    const url = filters.q || filters.category || filters.priceMin || filters.priceMax || filters.artist || filters.style
+      ? `${apiUrl}/api/artworks/search?${new URLSearchParams(filters).toString()}`
+      : `${apiUrl}/api/artworks`;
 
-      try {
-        const response = await fetch(url);
+    fetch(url)
+      .then((response) => {
         if (!response.ok) {
           throw new Error('Failed to fetch artworks');
         }
-        const data = await response.json();
-        setArtworks(data);
-      } catch (error) {
+        return response.json();
+      })
+      .then((data) => setArtworks(data))
+      .catch((error) => {
         console.error('Error fetching artworks:', error);
         setError('Unable to load artworks. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchArtworks();
+      })
+      .finally(() => setLoading(false));
   }, [filters]);
 
+  // Handle login
   const handleLogin = (userData) => {
     setUser(userData);
   };
 
+  // Handle register
   const handleRegister = (userData) => {
     setUser(userData);
   };
 
-  const handleLogout = async () => {
-    try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/logout`, {
-        method: 'GET',
-        credentials: 'include',
-      });
-      if (response.ok) {
-        setUser(null);
-      }
-    } catch (error) {
-      console.error('Error logging out:', error);
-    }
+  // Handle logout
+  const handleLogout = () => {
+    fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/logout`, {
+      method: 'GET',
+      credentials: 'include',
+    })
+      .then((response) => response.json())
+      .then(() => setUser(null))
+      .catch((error) => console.error('Error logging out:', error));
   };
 
+  // Handle search/filter submission
   const handleSearch = (newFilters) => {
     setFilters(newFilters);
   };
 
+  // Handle adding to cart
   const handleAddToCart = async (artworkId) => {
     if (!user) {
       setError('Please log in to add items to your cart.');
@@ -86,6 +85,7 @@ function App() {
     }
   };
 
+  // Handle adding to wishlist
   const handleAddToWishlist = async (artworkId) => {
     if (!user) {
       setError('Please log in to add items to your wishlist.');
@@ -131,12 +131,7 @@ function App() {
             </li>
             {user ? (
               <li>
-                <button
-                  onClick={handleLogout}
-                  className="text-gray-800 hover:text-red-600 font-medium"
-                >
-                  Logout
-                </button>
+                <button onClick={handleLogout} className="text-gray-800 hover:text-red-600 font-medium">Logout</button>
               </li>
             ) : (
               <>
@@ -185,13 +180,13 @@ function App() {
                       artworks.map((artwork) => (
                         <div key={artwork.id} className="bg-white p-4 rounded-lg shadow-md border border-gray-200">
                           <img
-                            src={`https://source.unsplash.com/300x200/?art,${artwork.medium ? artwork.medium.toLowerCase() : 'default'}`}
+                            src={`https://source.unsplash.com/300x200/?art,${artwork.medium ? artwork.medium.toLowerCase() : 'unknown'}`}
                             alt={artwork.title}
                             className="h-48 w-full object-cover rounded"
                           />
                           <h3 className="mt-4 text-lg font-medium text-gray-900">{artwork.title}</h3>
                           <p className="mt-2 text-gray-600">${artwork.price}</p>
-                          <p className="mt-1 text-sm text-gray-500">{artwork.artist} - {artwork.medium || 'Unknown Medium'}</p>
+                          <p className="mt-1 text-sm text-gray-500">{artwork.artist} - {artwork.medium || 'Unknown'}</p>
                           <div className="mt-4 flex space-x-2">
                             <button
                               onClick={() => handleAddToCart(artwork.id)}
@@ -221,8 +216,13 @@ function App() {
           <Route path="/cart" element={<Cart user={user} />} />
           <Route path="/wishlist" element={<Wishlist user={user} />} />
           <Route path="/artworks" element={<div>Artworks Page (Coming Soon)</div>} />
-          <Route path="/artists" element={<div>Artists Page (Coming Soon)</div>} />
-          <Route path="/membership" element={user ? <div>Membership Page (Coming Soon)</div> : <Navigate to="/login" />} />
+          <Route path="/artists" element={<ArtistList />} />
+          <Route path="/artists/:id" element={<ArtistProfile />} />
+          <Route path="/membership" element={<div>Membership Page (Coming Soon)</div>} />
+          <Route
+            path="/membership"
+            element={user ? <div>Membership Page (Coming Soon)</div> : <Navigate to="/login" />}
+          />
         </Routes>
       </div>
     </Router>
