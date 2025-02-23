@@ -205,6 +205,48 @@ app.get('/api/artworks/search', async (req, res) => {
     }
 });
 
+// New Artist APIs
+app.get('/api/artists', async (req, res) => {
+  try {
+    const artists = await artistsCollection.find({}).toArray();
+    res.json(artists);
+  } catch (error) {
+    console.error('Error fetching artists:', error);
+    res.status(500).send('Something went wrong');
+  }
+});
+
+app.get('/api/artists/search', async (req, res) => {
+  try {
+    const { q } = req.query;
+    let query = {};
+
+    if (q) {
+      query.name = { $regex: q, $options: 'i' }; // Case-insensitive search in name
+    }
+
+    const artists = await artistsCollection.find(query).toArray();
+    res.json(artists);
+  } catch (error) {
+    console.error('Error searching artists:', error);
+    res.status(500).send('Something went wrong');
+  }
+});
+
+app.get('/api/artists/:id', async (req, res) => {
+  try {
+    const artist = await artistsCollection.findOne({ _id: new ObjectId(req.params.id) });
+    if (!artist) return res.status(404).send('Artist not found');
+
+    // Fetch artist's artworks
+    const artworks = await artworksCollection.find({ id: { $in: artist.artworks } }).toArray();
+    res.json({ ...artist, artworks });
+  } catch (error) {
+    console.error('Error fetching artist profile:', error);
+    res.status(500).send('Something went wrong');
+  }
+});
+
 // Payment with Stripe (test mode)
 app.post('/api/checkout', isAuthenticated, async (req, res) => {
   try {
