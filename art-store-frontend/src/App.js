@@ -5,20 +5,26 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Cart from './components/Cart';
 import Wishlist from './components/Wishlist';
+import SearchFilter from './components/SearchFilter';
 
 function App() {
   const [artworks, setArtworks] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null); // Track logged-in user
+  const [filters, setFilters] = useState({});
 
   // Fetch artworks from the backend
   useEffect(() => {
     const fetchArtworks = async () => {
       setLoading(true);
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const url = filters.q || filters.category || filters.priceMin || filters.priceMax || filters.artist || filters.style
+        ? `${apiUrl}/api/artworks/search?${new URLSearchParams(filters).toString()}`
+        : `${apiUrl}/api/artworks`;
+
       try {
-        const response = await fetch(`${apiUrl}/api/artworks`);
+        const response = await fetch(url);
         if (!response.ok) {
           throw new Error('Failed to fetch artworks');
         }
@@ -33,45 +39,41 @@ function App() {
     };
 
     fetchArtworks();
-  }, []);
+  }, [filters]);
 
-  // Handle login
   const handleLogin = (userData) => {
     setUser(userData);
   };
 
-  // Handle register
   const handleRegister = (userData) => {
     setUser(userData);
   };
 
-  // Handle logout
   const handleLogout = async () => {
-    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
     try {
-      const response = await fetch(`${apiUrl}/api/logout`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/logout`, {
         method: 'GET',
-        credentials: 'include', // Include cookies for session
+        credentials: 'include',
       });
       if (response.ok) {
         setUser(null);
-      } else {
-        throw new Error('Logout failed');
       }
     } catch (error) {
       console.error('Error logging out:', error);
     }
   };
 
-  // Helper functions for cart and wishlist
+  const handleSearch = (newFilters) => {
+    setFilters(newFilters);
+  };
+
   const handleAddToCart = async (artworkId) => {
     if (!user) {
       setError('Please log in to add items to your cart.');
       return;
     }
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      await fetch(`${apiUrl}/api/cart/add`, {
+      await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/cart/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -90,8 +92,7 @@ function App() {
       return;
     }
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      await fetch(`${apiUrl}/api/wishlist/add`, {
+      await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/wishlist/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -130,7 +131,12 @@ function App() {
             </li>
             {user ? (
               <li>
-                <button onClick={handleLogout} className="text-gray-800 hover:text-red-600 font-medium">Logout</button>
+                <button
+                  onClick={handleLogout}
+                  className="text-gray-800 hover:text-red-600 font-medium"
+                >
+                  Logout
+                </button>
               </li>
             ) : (
               <>
@@ -156,9 +162,14 @@ function App() {
                   <div className="text-center">
                     <h1 className="text-4xl font-bold">Welcome to the Art Store</h1>
                     <p className="mt-2 text-lg">Discover unique artworks from talented artists</p>
-                    <button className="mt-4 px-6 py-2 bg-yellow-500 text-black rounded hover:bg-yellow-600">Explore Art</button>
+                    <button className="mt-4 px-6 py-2 bg-yellow-500 text-black rounded hover:bg-yellow-600">
+                      Explore Art
+                    </button>
                   </div>
                 </header>
+
+                {/* Search and Filter */}
+                <SearchFilter onSearch={handleSearch} />
 
                 {/* Featured Art Section */}
                 <section className="py-10 px-5">
