@@ -1,9 +1,10 @@
 const express = require('express');
-const { MongoClient } = require('mongodb');
+const { MongoClient, ObjectId } = require('mongodb');
 const cors = require('cors');
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const bcrypt = require('bcrypt');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Add to .env
 require('dotenv').config();
 
 const app = express();
@@ -12,9 +13,9 @@ const port = 5000;
 // Middleware
 app.use(express.json());
 app.use(cors({
-    origin: '*', // Match your frontend URL
-    credentials: true,
-  }));
+  origin: 'https://art-store-frontend.onrender.com', // Match your frontend URL
+  credentials: true,
+}));
 app.use(passport.initialize());
 
 // MongoDB connection string from .env
@@ -36,8 +37,10 @@ async function connectToDatabase() {
 const db = client.db('artstore');
 const artworksCollection = db.collection('artworks');
 const usersCollection = db.collection('users');
+const cartsCollection = db.collection('carts');
+const wishlistsCollection = db.collection('wishlists');
 
-// Passport configuration
+// Passport configuration (unchanged from previous step)
 passport.use(
   new LocalStrategy(async (username, password, done) => {
     try {
@@ -60,7 +63,7 @@ passport.serializeUser((user, done) => {
 
 passport.deserializeUser(async (id, done) => {
   try {
-    const user = await usersCollection.findOne({ _id: id });
+    const user = await usersCollection.findOne({ _id: new ObjectId(id) });
     done(null, user);
   } catch (error) {
     done(error);
@@ -89,7 +92,7 @@ app.get('/api/artworks', async (req, res) => {
   }
 });
 
-// Register a new user
+// Register, Login, Logout (unchanged from previous step)
 app.post('/api/register', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -107,12 +110,10 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-// Login (authenticate)
 app.post('/api/login', passport.authenticate('local'), (req, res) => {
   res.json({ message: 'Logged in successfully', user: req.user });
 });
 
-// Logout
 app.get('/api/logout', (req, res) => {
   req.logout((err) => {
     if (err) return res.status(500).send('Error logging out');
@@ -120,9 +121,115 @@ app.get('/api/logout', (req, res) => {
   });
 });
 
-// Protected route example (requires authentication)
+// Protected route example
 app.get('/api/protected', isAuthenticated, (req, res) => {
   res.json({ message: 'This is a protected route', user: req.user });
+});
+
+// Cart APIs
+app.post('/api/cart/add', isAuthenticated, async (req, res) => {
+  try {
+    const { artworkId } = req.body;
+    const userId = req.user._id;
+    const cartItem = await cartsCollection.findOne({ userId, artworkId });
+    if (cartItem) return res.status(400).json({ message: 'Artwork already in cart' });
+
+    await cartsCollection.insertOne({ userId, artworkId, quantity: 1 });
+    res.json({ message: 'Artwork added to cart' });
+  } catch (error) {
+    console.error('Error adding to cart:', error);
+    res.status(500).send('Something went wrong');
+  }
+});
+
+app.get('/api/cart', isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const cartItems = await cartsCollection.aggregate([
+      { $match: { userId: new ObjectId(userId) } },
+      {
+        $lookup: {
+          from: 'artworks',
+          localField: 'artworkId',
+          foreignField: 'id',
+          as: 'artwork'
+        }
+      },
+      { $unwind: '$artwork' }
+    ]).toArray();
+    res.json(cartItems);
+  } catch (error) {
+    console.error('Error fetching cart:', error);
+    res.status(500).send('Something went wrong');
+  }
+});
+
+// Wishlist APIs
+app.post('/api/wishlist/add', isAuthenticated, async (req, res) => {
+  try {
+    const { artworkId } = req.body;
+    const userId = req.user._id;
+    const wishlistItem = await wishlistsCollection.findOne({ userId, artworkId });
+    if (wishlistItem) return res.status(400).json({ message: 'Artwork already in wishlist' });
+
+    await wishlistsCollection.insertOne({ userId, artworkId });
+    res.json({ message: 'Artwork added to wishlist' });
+  } catch (error) {
+    console.error('Error adding to wishlist:', error);
+    res.status(500).send('Something went wrong');
+  }
+});
+
+app.get('/api/wishlist', isAuthenticated, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const wishlistItems = await wishlistsCollection.aggregate([
+      { $match: { userId: new ObjectId(userId) } },
+      {
+        $lookup: {
+          from: 'artworks',
+          localField: 'artworkId',
+          foreignField: 'id',
+          as: 'artwork'
+        }
+      },
+      { $unwind: '$artwork' }
+    ]).toArray();
+    res.json(wishlistItems);
+  } catch (error) {
+    console.error('Error fetching wishlist:', error);
+    res.status(500).send('Something went wrong');
+  }
+});
+
+// Payment with Stripe (test mode)
+app.post('/api/checkout', isAuthenticated, async (req, res) => {
+  try {
+    const { cartItems } = req.body; // Array of { artworkId, quantity }
+    const lineItems = cartItems.map(item => ({
+      price_data: {
+        currency: 'usd',
+        product_data: {
+          name: item.artwork.title,
+        },
+        unit_amount: item.artwork.price * 100, // Convert to cents
+      },
+      quantity: item.quantity,
+    }));
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: lineItems,
+      mode: 'payment',
+      success_url: 'https://art-store-frontend.onrender.com/success',
+      cancel_url: 'https://art-store-frontend.onrender.com/cancel',
+    });
+
+    res.json({ url: session.url });
+  } catch (error) {
+    console.error('Error creating checkout session:', error);
+    res.status(500).send('Something went wrong');
+  }
 });
 
 // Start the server and connect to MongoDB
