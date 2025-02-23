@@ -8,7 +8,7 @@ const bcrypt = require('bcrypt');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Initialize Stripe
 
 const app = express();
-const port = 5000;
+const port = process.env.PORT || 5000; // Use environment variable for port
 
 // Middleware
 app.use(express.json());
@@ -39,6 +39,7 @@ const artworksCollection = db.collection('artworks');
 const usersCollection = db.collection('users');
 const cartsCollection = db.collection('carts');
 const wishlistsCollection = db.collection('wishlists');
+const artistsCollection = db.collection('artists'); // Added artists collection
 
 // Passport configuration
 passport.use(
@@ -128,6 +129,7 @@ app.post('/api/cart/add', isAuthenticated, async (req, res) => {
   try {
     const { artworkId } = req.body;
     const userId = req.user._id;
+
     const cartItem = await cartsCollection.findOne({ userId, artworkId });
     if (cartItem) return res.status(400).json({ message: 'Artwork already in cart' });
 
@@ -161,51 +163,51 @@ app.get('/api/cart', isAuthenticated, async (req, res) => {
   }
 });
 
-// New Search API
+// Search API
 app.get('/api/artworks/search', async (req, res) => {
-    try {
-      const { q, category, priceMin, priceMax, artist, style } = req.query;
-      let query = {};
-  
-      // Search by keyword (title or artist)
-      if (q) {
-        query.$or = [
-          { title: { $regex: q, $options: 'i' } }, // Case-insensitive search in title
-          { artist: { $regex: q, $options: 'i' } }, // Case-insensitive search in artist
-        ];
-      }
-  
-      // Filter by category
-      if (category) {
-        query.medium = category;
-      }
-  
-      // Filter by price range
-      if (priceMin || priceMax) {
-        query.price = {};
-        if (priceMin) query.price.$gte = parseFloat(priceMin);
-        if (priceMax) query.price.$lte = parseFloat(priceMax);
-      }
+  try {
+    const { q, category, priceMin, priceMax, artist, style } = req.query;
+    let query = {};
 
-      // Filter by artist
-      if (artist) {
-        query.artist = { $regex: artist, $options: 'i' };
-      }
-  
-      // Filter by style (if you add a style field to artworks in MongoDB)
-      if (style) {
-        query.style = style; // Assuming artworks have a 'style' field (e.g., Abstract, Realism)
-      }
-  
-      const artworks = await artworksCollection.find(query).toArray();
-      res.json(artworks);
-    } catch (error) {
+    // Search by keyword (title or artist)
+    if (q) {
+      query.$or = [
+        { title: { $regex: q, $options: 'i' } },
+        { artist: { $regex: q, $options: 'i' } }
+      ];
+    }
+
+    // Filter by category
+    if (category) {
+      query.medium = category;
+    }
+
+    // Filter by price range
+    if (priceMin || priceMax) {
+      query.price = {};
+      if (priceMin) query.price.$gte = parseFloat(priceMin);
+      if (priceMax) query.price.$lte = parseFloat(priceMax);
+    }
+
+    // Filter by artist
+    if (artist) {
+      query.artist = { $regex: artist, $options: 'i' };
+    }
+
+    // Filter by style
+    if (style) {
+      query.style = style;
+    }
+
+    const artworks = await artworksCollection.find(query).toArray();
+    res.json(artworks);
+  } catch (error) {
     console.error('Error searching artworks:', error);
     res.status(500).send('Something went wrong');
-    }
+  }
 });
 
-// New Artist APIs
+// Artist APIs
 app.get('/api/artists', async (req, res) => {
   try {
     const artists = await artistsCollection.find({}).toArray();
@@ -216,29 +218,11 @@ app.get('/api/artists', async (req, res) => {
   }
 });
 
-app.get('/api/artists/search', async (req, res) => {
-  try {
-    const { q } = req.query;
-    let query = {};
-
-    if (q) {
-      query.name = { $regex: q, $options: 'i' }; // Case-insensitive search in name
-    }
-
-    const artists = await artistsCollection.find(query).toArray();
-    res.json(artists);
-  } catch (error) {
-    console.error('Error searching artists:', error);
-    res.status(500).send('Something went wrong');
-  }
-});
-
 app.get('/api/artists/:id', async (req, res) => {
   try {
     const artist = await artistsCollection.findOne({ _id: new ObjectId(req.params.id) });
     if (!artist) return res.status(404).send('Artist not found');
 
-    // Fetch artist's artworks
     const artworks = await artworksCollection.find({ id: { $in: artist.artworks } }).toArray();
     res.json({ ...artist, artworks });
   } catch (error) {
@@ -247,7 +231,7 @@ app.get('/api/artists/:id', async (req, res) => {
   }
 });
 
-// Payment with Stripe (test mode)
+// Payment with Stripe
 app.post('/api/checkout', isAuthenticated, async (req, res) => {
   try {
     const { cartItems } = req.body; // Array of { artworkId, quantity }
